@@ -8,18 +8,45 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:login/inicio.dart';
 import 'package:login/signup.dart';
 
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+
 class Login extends StatefulWidget {
   @override
   _Login createState() => _Login();
 }
 
 class _Login extends State<Login>{
+
+  final GoogleSignIn _googleSignIn = GoogleSignIn();
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  bool isUserSignedIn = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    checkIfUserIsSignedIn();
+  }
+
+  void checkIfUserIsSignedIn() async {
+    var userSignedIn = await _googleSignIn.isSignedIn();
+
+    setState(() {
+      isUserSignedIn = userSignedIn;
+    });
+  }
+  
   TextEditingController usernameController = new TextEditingController();
   TextEditingController passwordController = new TextEditingController();
-
   bool _isLoading = false;
 
-  signIn(String username, String password) async{
+ //agrege inicio
+
+
+//agregue fin
+
+  /*signIn(String username, String password) async{
     Map data ={
       'username' : username,
       'password' : password
@@ -38,7 +65,10 @@ class _Login extends State<Login>{
     }else{
       print(response.body);
     }
-  }
+
+  }*/
+
+
 @override
   Widget build(BuildContext context) {
     return new Scaffold(
@@ -128,11 +158,11 @@ class _Login extends State<Login>{
                             setState(() {
                               _isLoading = true;
                             });
-                            signIn(usernameController.text, passwordController.text);
+                           onGoogleSignIn(context);
                           },
                           child: Center(
                             child: Text(
-                              'LOGIN',
+                              'LOGIN eith google',
                               style: TextStyle(
                                   color: Colors.white,
                                   fontWeight: FontWeight.bold,
@@ -143,35 +173,7 @@ class _Login extends State<Login>{
                       ),
                     ),
                     SizedBox(height: 20.0),
-                    Container(
-                      height: 40.0,
-                      color: Colors.transparent,
-                      child: Container(
-                        decoration: BoxDecoration(
-                            border: Border.all(
-                                color: Colors.black,
-                                style: BorderStyle.solid,
-                                width: 1.0),
-                            color: Colors.transparent,
-                            borderRadius: BorderRadius.circular(20.0)),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: <Widget>[
-                            Center(
-                              child:
-                                  ImageIcon(AssetImage('assets/img/facebook.png')),
-                            ),
-                            SizedBox(width: 10.0),
-                            Center(
-                              child: Text('Log in with facebook',
-                                  style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontFamily: 'Montserrat')),
-                            )
-                          ],
-                        ),
-                      ),
-                    )
+                   
                   ],
                 )),
             SizedBox(height: 15.0),
@@ -202,4 +204,128 @@ class _Login extends State<Login>{
         ));
   }
  
+
+
+   Future<FirebaseUser> _handleSignIn() async {
+    FirebaseUser user;
+    bool userSignedIn = await _googleSignIn.isSignedIn();  
+    
+    setState(() {
+      isUserSignedIn = userSignedIn;
+    });
+
+    if (isUserSignedIn) {
+      user = await _auth.currentUser();
+    }
+    else {
+      final GoogleSignInAccount googleUser = await _googleSignIn.signIn();
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+
+      final AuthCredential credential = GoogleAuthProvider.getCredential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      user = (await _auth.signInWithCredential(credential)).user;
+      userSignedIn = await _googleSignIn.isSignedIn();
+      setState(() {
+      isUserSignedIn = userSignedIn;
+      });
+    }
+
+    return user;
+  }
+
+  void onGoogleSignIn(BuildContext context) async {
+    FirebaseUser user = await _handleSignIn();
+    var userSignedIn = await Navigator.push(
+              context,
+              MaterialPageRoute(
+                  builder: (context) =>
+                      WelcomeUserWidget(user, _googleSignIn)),
+            );
+
+    setState(() {
+      isUserSignedIn = userSignedIn == null ? true : false;
+    });
+  }
+
 }
+
+
+class WelcomeUserWidget extends StatelessWidget {
+
+  GoogleSignIn _googleSignIn;
+  FirebaseUser _user;
+
+  WelcomeUserWidget(FirebaseUser user, GoogleSignIn signIn) {
+    _user = user;
+    _googleSignIn = signIn;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        iconTheme: IconThemeData(color: Colors.white),
+        elevation: 0,
+      ),
+      body: Container(
+        color: Colors.black,
+        padding: EdgeInsets.all(50),
+        child: Align(
+          alignment: Alignment.center,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              ClipOval(
+                child: Image.network(
+                  _user.photoUrl,
+                  width: 100,
+                  height: 100,
+                  fit: BoxFit.cover
+                )
+              ),
+              SizedBox(height: 20),
+              Text('Bienvenido!!!,', textAlign: TextAlign.center),
+              Text(_user.displayName, textAlign: TextAlign.center, 
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 25)),
+              SizedBox(height: 20),
+              FlatButton(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                onPressed: () {
+                  _googleSignIn.signOut();
+                  Navigator.pop(context, false);
+                },
+                color: Colors.redAccent,
+                child: Padding(
+                  padding: EdgeInsets.all(10),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: <Widget>[
+                      Icon(Icons.exit_to_app, color: Colors.white),
+                      SizedBox(width: 10),
+                      Text('Inicia sesion con Google', style: TextStyle(color: Colors.white))
+                    ],
+                  )
+                )
+              )
+            ],
+          )
+        )
+      )
+    );
+  }
+}
+
+
+
+
+
+
+
+
